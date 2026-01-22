@@ -101,6 +101,61 @@ vidmode_t *R_GetVideoMode( int num )
 static void R_InitVideoModes( void )
 {
 	char buf[MAX_VA_STRING];
+#if XASH_MOBILE_PLATFORM
+	// For mobile platforms, provide common resolution options
+	const struct {
+		int width;
+		int height;
+	} mobile_modes[] = {
+		{ 1920, 1080 },	// Full HD
+		{ 1280, 720 },	// HD
+		{ 1024, 768 },	// XGA
+		{ 960, 540 },	// QHD
+		{ 854, 480 },	// 854p
+		{ 800, 480 },	// WVGA
+		{ 768, 432 },	// Half-HD
+		{ 720, 480 },	// NTSC
+		{ 640, 480 },	// VGA
+		{ 640, 360 },	// nHD
+		{ 480, 270 },	// HVGA
+		{ 0, 0 }		// Terminator
+	};
+
+	int i;
+	int screen_width = 0, screen_height = 0;
+
+	// Try to get the actual screen size
+	SDL_Rect **sdl_modes = SDL_ListModes( NULL, SDL_FULLSCREEN );
+	if( sdl_modes && sdl_modes != (void*)-1 && sdl_modes[0] )
+	{
+		screen_width = sdl_modes[0]->w;
+		screen_height = sdl_modes[0]->h;
+	}
+
+	vidmodes = Mem_Malloc( host.mempool, sizeof( mobile_modes ));
+
+	for( i = 0; mobile_modes[i].width != 0; i++ )
+	{
+		int width = mobile_modes[i].width;
+		int height = mobile_modes[i].height;
+
+		if( width < VID_MIN_WIDTH || height < VID_MIN_HEIGHT )
+			continue;
+
+		if( screen_width > 0 && screen_height > 0 )
+		{
+			if( width > screen_width || height > screen_height )
+				continue;
+		}
+
+		vidmodes[num_vidmodes].width = width;
+		vidmodes[num_vidmodes].height = height;
+		Q_snprintf( buf, sizeof( buf ), "%ix%i", width, height );
+		vidmodes[num_vidmodes].desc = copystring( buf );
+
+		num_vidmodes++;
+	}
+#else
 	SDL_Rect **modes;
 	int len = 0, i = 0, j;
 
@@ -136,6 +191,7 @@ static void R_InitVideoModes( void )
 
 		num_vidmodes++;
 	}
+#endif // XASH_MOBILE_PLATFORM
 }
 
 static void R_FreeVideoModes( void )

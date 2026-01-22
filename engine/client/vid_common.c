@@ -179,11 +179,32 @@ static void VID_Mode_f( void )
 	case 2:
 	{
 		vidmode_t *vidmode;
+		const char *arg = Cmd_Argv( 1 );
 
-		vidmode = R_GetVideoMode( Q_atoi( Cmd_Argv( 1 )) );
+		// Check if user wants to list available modes
+		if( !Q_stricmp( arg, "list" ) || !Q_stricmp( arg, "?" ))
+		{
+			int i;
+			int total = R_MaxVideoModes();
+
+			Con_Printf( "\nAvailable video modes:\n" );
+			for( i = 0; i < total; i++ )
+			{
+				vidmode_t *mode = R_GetVideoMode( i );
+				if( mode )
+					Con_Printf( "  %d: %s\n", i, mode->desc );
+			}
+			Con_Printf( "\nUsage: vid_mode <modenum>|<width height>\n" );
+			Con_Printf( "Example: vid_mode 0\n" );
+			Con_Printf( "Example: vid_mode 1920 1080\n" );
+			return;
+		}
+
+		vidmode = R_GetVideoMode( Q_atoi( arg ) );
 		if( !vidmode )
 		{
 			Con_Printf( S_ERROR "unable to set mode, backend returned null\n" );
+			Con_Printf( "Use 'vid_mode list' to see available modes\n" );
 			return;
 		}
 
@@ -195,10 +216,24 @@ static void VID_Mode_f( void )
 	{
 		w = Q_atoi( Cmd_Argv( 1 ));
 		h = Q_atoi( Cmd_Argv( 2 ));
+
+		// Validate resolution
+		if( w < VID_MIN_WIDTH || h < VID_MIN_HEIGHT )
+		{
+			Con_Printf( S_ERROR "Invalid resolution: %dx%d\n", w, h );
+			Con_Printf( "Minimum resolution: %dx%d\n", VID_MIN_WIDTH, VID_MIN_HEIGHT );
+			return;
+		}
+
+		Con_Printf( "Setting custom resolution: %dx%d\n", w, h );
 		break;
 	}
 	default:
-		Msg( S_USAGE "vid_mode <modenum>|<width height>\n" );
+		Msg( S_USAGE "vid_mode <modenum>|<width height>|list\n" );
+		Msg( "Examples:\n" );
+		Msg( "  vid_mode 0        - use mode 0\n" );
+		Msg( "  vid_mode 1920 1080 - custom resolution\n" );
+		Msg( "  vid_mode list     - list all modes\n" );
 		return;
 	}
 

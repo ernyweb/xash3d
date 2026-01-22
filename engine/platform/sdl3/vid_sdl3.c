@@ -207,6 +207,70 @@ static qboolean VID_CreateWindow( const int input_width, const int input_height,
 
 static void R_InitVideoModes( void )
 {
+#if XASH_MOBILE_PLATFORM
+	// For mobile platforms (Android, iOS), provide common resolution options
+	const struct {
+		int width;
+		int height;
+	} mobile_modes[] = {
+		// Common mobile resolutions
+		{ 1920, 1080 },	// Full HD
+		{ 1280, 720 },	// HD
+		{ 1024, 768 },	// XGA
+		{ 960, 540 },	// QHD
+		{ 854, 480 },	// 854p
+		{ 800, 480 },	// WVGA
+		{ 768, 432 },	// Half-HD
+		{ 720, 480 },	// NTSC
+		{ 640, 480 },	// VGA
+		{ 640, 360 },	// nHD
+		{ 480, 270 },	// HVGA
+		{ 0, 0 }		// Terminator
+	};
+
+	int i;
+	int screen_width = 0, screen_height = 0;
+
+	// Try to get the actual screen size
+	SDL_DisplayMode *mode = SDL_GetCurrentDisplayMode( SDL_GetDisplayForWindow( host.hWnd ));
+	if( mode )
+	{
+		screen_width = mode->w;
+		screen_height = mode->h;
+		SDL_free( mode );
+	}
+
+	vid_state.num_vidmodes = 0;
+	vid_state.vidmodes = Mem_Malloc( host.mempool, sizeof( mobile_modes ));
+
+	for( i = 0; mobile_modes[i].width != 0; i++ )
+	{
+		int width = mobile_modes[i].width;
+		int height = mobile_modes[i].height;
+
+		if( width < VID_MIN_WIDTH || height < VID_MIN_HEIGHT )
+			continue;
+
+		// Skip resolutions larger than the actual screen
+		if( screen_width > 0 && screen_height > 0 )
+		{
+			if( width > screen_width || height > screen_height )
+				continue;
+		}
+
+		vid_state.vidmodes[vid_state.num_vidmodes].width = width;
+		vid_state.vidmodes[vid_state.num_vidmodes].height = height;
+
+		char buf[MAX_VA_STRING];
+		Q_snprintf( buf, sizeof( buf ), "%dx%d", width, height );
+		vid_state.vidmodes[vid_state.num_vidmodes].desc = copystring( buf );
+
+		vid_state.num_vidmodes++;
+	}
+
+	Con_Reportf( "R_InitVideoModes: initialized %d video modes for mobile platform\n", vid_state.num_vidmodes );
+#else
+	// Desktop platform: query available display modes
 	SDL_DisplayID display = SDL_GetDisplayForWindow( host.hWnd );
 	int count;
 	SDL_DisplayMode **modes = SDL_GetFullscreenDisplayModes( display, &count );
@@ -251,6 +315,7 @@ static void R_InitVideoModes( void )
 	}
 
 	SDL_free( modes );
+#endif // XASH_MOBILE_PLATFORM
 }
 
 void Platform_Minimize_f( void )
@@ -518,14 +583,15 @@ qboolean VID_SetMode( void )
 	if( screen_width < VID_MIN_WIDTH || screen_height < VID_MIN_HEIGHT )
 	{
 		screen_width = vid_state.prev_width;
-		screen_width = vid_state.prev_height;
+		screen_height = vid_state.prev_height;
 	}
 
 #if XASH_MOBILE_PLATFORM
+	// On mobile platforms, we allow fullscreen only but still support resolution changes
 	if( Q_strcmp( vid_fullscreen.string, DEFAULT_FULLSCREEN ))
 	{
 		Cvar_DirectSet( &vid_fullscreen, DEFAULT_FULLSCREEN );
-		Con_Reportf( S_ERROR "%s: windowed unavailable on this platform\n", __func__ );
+		Con_Reportf( S_NOTE "%s: setting to fullscreen mode on mobile platform\n", __func__ );
 	}
 #endif
 

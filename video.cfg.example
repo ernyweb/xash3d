@@ -1,0 +1,41 @@
+// Xash3D Video Configuration File
+// This file is loaded at engine startup and sets default video settings
+// Place this file in your game directory as 'video.cfg'
+
+// Screen resolution - width and height in pixels
+// Common resolutions:
+// 1920 1080 - Full HD (16:9)
+// 1280 720  - HD (16:9)
+// 1024 768  - XGA (4:3)
+// 854 480   - 854p (16:9)
+// 800 480   - WVGA (5:3)
+// 640 480   - VGA (4:3)
+width "1280"
+height "720"
+
+// Fullscreen mode
+// 0 = Windowed (desktop only)
+// 1 = Fullscreen
+// 2 = Borderless fullscreen (desktop only)
+fullscreen "1"
+
+// Pixel scale factor (1.0 = normal, higher = larger pixels/lower resolution)
+vid_scale "1.0"
+
+// Screen rotation (platform-dependent, usually 0-3)
+vid_rotate "0"
+
+// Vertical sync (0 = off, 1 = on)
+gl_vsync "1"
+
+// Window position (desktop only, -1 = use default/center)
+_window_xpos "-1"
+_window_ypos "-1"
+
+// Graphics quality settings
+r_lighting_modulate "0.6"
+r_drawentities "1"
+r_drawworld "1"
+
+// Performance related
+gl_clear "0"
