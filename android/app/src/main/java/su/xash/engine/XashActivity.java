@@ -188,4 +188,4 @@ public class XashActivity extends SDLActivity {
 			nativeSetenv("XASH3D_WIDTH", widthStr);
 			nativeSetenv("XASH3D_HEIGHT", heightStr);
 		});
-	}
+	}}
