@@ -3,6 +3,9 @@
 
 # This script demonstrates how to use the new video resolution features
 
+
+
+
 # 1. List all available video resolutions
 echo "1. List available resolutions:"
 echo "   vid_mode list"
