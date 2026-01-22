@@ -8,6 +8,10 @@ import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.TextView
 
+fun interface ResolutionCallback {
+    fun onResolutionSelected(width: Int, height: Int)
+}
+
 class ResolutionDialog(context: Context) {
     private val sharedPref: SharedPreferences = context.getSharedPreferences("xash_settings", Context.MODE_PRIVATE)
     
@@ -41,7 +45,7 @@ class ResolutionDialog(context: Context) {
         }.apply()
     }
     
-    fun showDialog(context: Context, onResolutionSelected: (Int, Int) -> Unit) {
+    fun showDialog(context: Context, onResolutionSelected: ResolutionCallback) {
         val names = resolutions.map { it.name }.toTypedArray()
         
         val (currentWidth, currentHeight) = getSelectedResolution()
@@ -60,7 +64,7 @@ class ResolutionDialog(context: Context) {
                 } else {
                     val selected = resolutions[which]
                     saveResolution(selected.width, selected.height)
-                    onResolutionSelected(selected.width, selected.height)
+                    onResolutionSelected.onResolutionSelected(selected.width, selected.height)
                     dialog.dismiss()
                 }
             }
@@ -70,7 +74,7 @@ class ResolutionDialog(context: Context) {
             .show()
     }
     
-    private fun showCustomResolutionDialog(context: Context, onResolutionSelected: (Int, Int) -> Unit) {
+    private fun showCustomResolutionDialog(context: Context, onResolutionSelected: ResolutionCallback) {
         // Create custom layout for width and height input
         val container = LinearLayout(context).apply {
             layoutParams = ViewGroup.LayoutParams(
@@ -127,7 +131,7 @@ class ResolutionDialog(context: Context) {
                     
                     if (width > 0 && height > 0 && width <= 7680 && height <= 4320) {
                         saveResolution(width, height)
-                        onResolutionSelected(width, height)
+                        onResolutionSelected.onResolutionSelected(width, height)
                         dialog.dismiss()
                     } else {
                         android.widget.Toast.makeText(
