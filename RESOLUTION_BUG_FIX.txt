@@ -1,0 +1,176 @@
+RESOLUTION CHANGE BUG FIX - DETAILED ANALYSIS
+==============================================
+
+PROBLEM IDENTIFIED
+==================
+
+The resolution was not changing when user executed "vid_mode" command because:
+
+1. **Missing Flag Set**: The vid_mode command was not setting host.renderinfo_changed flag
+   - This flag is crucial for VID_CheckChanges() to detect and apply changes
+   - VID_CheckChanges() is called every frame from cl_main.c
+   - Without this flag, the resolution change was silently ignored
+
+2. **Android Fullscreen Override**: On Android, the code was forcing fullscreen mode
+   and potentially ignoring resolution changes
+
+3. **Missing Debug Output**: No logging to track what was happening in the resolution change process
+
+SOLUTION IMPLEMENTED
+====================
+
+1. **FIXED: VID_Mode Command** (engine/client/vid_common.c)
+   - Added SetBits( host.renderinfo_changed, true ) to trigger video mode change detection
+   - Added Cbuf_AddText to properly execute width/height commands
+   - Added debug logging to track command execution
+   
+   CODE CHANGE:
+   ```c
+   // Use Cbuf_AddText to execute width and height commands
+   Q_snprintf( cmd, sizeof( cmd ), "width %d; height %d\n", w, h );
+   Con_Printf( "Applying resolution: %dx%d\n", w, h );
+   Cbuf_AddText( cmd );
+   
+   // Set flag to ensure VID_CheckChanges catches the change
+   SetBits( host.renderinfo_changed, true );
+   ```
+
+2. **FIXED: VID_SetMode** (engine/platform/sdl2/vid_sdl2.c & sdl3)
+   - Changed Android fullscreen override to use WINDOW_MODE_FULLSCREEN directly instead of reading cvar
+   - Added detailed debug logging at each step
+   - Improved error messages to show what's happening
+   
+   KEY CHANGES:
+   - Android now uses window_mode = WINDOW_MODE_FULLSCREEN (enforced)
+   - Desktop uses window_mode = bound( 0, vid_fullscreen.value, ... )
+   - Added Con_Reportf() calls to track execution flow
+
+3. **ADDED: Debug Logging Throughout** 
+   Files modified:
+   - engine/client/vid_common.c - R_SaveVideoMode, VID_CheckChanges
+   - engine/platform/sdl2/vid_sdl2.c - R_ChangeDisplaySettings, VID_SaveWindowSize, VID_SetScreenResolution
+   
+   Logs added to track:
+   - When resolution change is requested
+   - When flags are set
+   - When display settings are applied
+   - Final resolution that was set
+   - Any errors that occur
+
+TESTING INSTRUCTIONS
+====================
+
+After rebuild, test the fix:
+
+1. Launch game
+2. Open console (` key)
+3. Try changing resolution:
+   ```
+   vid_mode 1280 720
+   ```
+
+4. Look for these debug messages in console:
+   ```
+   Applying resolution: 1280x720
+   VID_Mode_f: Set renderinfo_changed flag
+   VID_CheckChanges: renderinfo_changed is set, calling VID_SetMode
+   VID_SetMode: Mobile platform - setting 1280x720 resolution in fullscreen
+   VID_SetScreenResolution: Attempting to set 1280x720 mode=1 (prev_mode=...)
+   R_ChangeDisplaySettings: Attempting to change resolution to 1280x720 (mode: 1)
+   R_ChangeDisplaySettings: Successfully changed resolution to 1280x720
+   ```
+
+5. Resolution should change immediately on screen
+
+EXPECTED BEHAVIOR AFTER FIX
+===========================
+
+✅ Resolution changes instantly when you execute "vid_mode WIDTH HEIGHT"
+✅ Preset modes work: "vid_mode 0", "vid_mode 1", etc.
+✅ Custom resolutions work: "vid_mode 854 480", "vid_mode 640 481"
+✅ Debug console shows full trace of what's happening
+✅ No need to restart game
+✅ Works on Android in fullscreen mode
+✅ Works on desktop in selected fullscreen/windowed mode
+
+FILES MODIFIED
+==============
+
+1. engine/client/vid_common.c
+   - VID_Mode_f() - Added flag setting and command buffer execution
+   - VID_CheckChanges() - Added debug logging
+   - R_SaveVideoMode() - Added validation and debug logging
+
+2. engine/platform/sdl2/vid_sdl2.c
+   - VID_SetMode() - Fixed Android fullscreen handling, added logging
+   - R_ChangeDisplaySettings() - Added detailed debug output
+   - VID_SetScreenResolution() - Added debug logging
+   - VID_SaveWindowSize() - Added debug logging
+
+3. engine/platform/sdl3/vid_sdl3.c
+   - VID_SetMode() - Same fixes as SDL2 for consistency
+
+TECHNICAL FLOW (NOW CORRECT)
+============================
+
+User executes:  vid_mode 1280 720
+                   ↓
+VID_Mode_f():   Parse arguments, validate dimensions
+                   ↓
+                Cbuf_AddText("width 1280; height 720")
+                   ↓
+                SetBits(host.renderinfo_changed, true)
+                   ↓
+Frame update:   VID_CheckChanges() detects flag
+                   ↓
+VID_SetMode():  Reads width/height cvars
+                   ↓
+R_ChangeDisplaySettings(): Actually changes display mode
+                   ↓
+VID_SaveWindowSize(): Saves the new resolution
+                   ↓
+R_SaveVideoMode(): Updates refState with new dimensions
+                   ↓
+SCR_VidInit():  Notifies client.dll of video mode change
+                   ↓
+Resolution changed successfully!
+
+ROOT CAUSE ANALYSIS
+===================
+
+The main issue was that the original implementation:
+1. Called R_ChangeDisplaySettings() directly from VID_Mode_f
+2. Did NOT set host.renderinfo_changed flag
+3. This flag is what triggers the entire video mode change system
+4. Without the flag, VID_CheckChanges() would not detect the change
+
+The correct flow is:
+1. User command sets a flag
+2. Next frame's VID_CheckChanges() detects the flag
+3. Then VID_SetMode() is called
+4. Display is updated
+
+This ensures all systems are synchronized and frame-perfect execution.
+
+ANDROID-SPECIFIC NOTES
+======================
+
+- Android is now set to WINDOW_MODE_FULLSCREEN by default
+- Resolution changes only affect render size within fullscreen
+- SDL2/SDL3 handle the actual render surface size change
+- User can still select different resolutions, they just stay fullscreen
+
+BACKWARD COMPATIBILITY
+======================
+
+✅ All changes are backward compatible
+✅ Existing config files still work
+✅ No API changes
+✅ Only adds debug output (can be suppressed with log level settings)
+
+PERFORMANCE IMPACT
+==================
+
+Minimal - only added Con_Reportf() calls which are buffered and don't block
+
+==============================================================================

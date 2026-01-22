@@ -587,15 +587,16 @@ qboolean VID_SetMode( void )
 	}
 
 #if XASH_MOBILE_PLATFORM
-	// On mobile platforms, we allow fullscreen only but still support resolution changes
-	if( Q_strcmp( vid_fullscreen.string, DEFAULT_FULLSCREEN ))
-	{
-		Cvar_DirectSet( &vid_fullscreen, DEFAULT_FULLSCREEN );
-		Con_Reportf( S_NOTE "%s: setting to fullscreen mode on mobile platform\n", __func__ );
-	}
+	// On mobile platforms, enforce fullscreen mode for better mobile experience
+	// but allow resolution changes
+	window_mode = WINDOW_MODE_FULLSCREEN;
+	
+	// Log current requested resolution
+	Con_Reportf( "VID_SetMode: Mobile platform - setting %dx%d resolution in fullscreen\n", screen_width, screen_height );
+#else
+	window_mode = bound( 0, vid_fullscreen.value, WINDOW_MODE_COUNT - 1 );
 #endif
 
-	window_mode = bound( 0, vid_fullscreen.value, WINDOW_MODE_COUNT - 1 );
 	SetBits( gl_vsync.flags, FCVAR_CHANGED );
 
 	err = R_ChangeDisplaySettings( screen_width, screen_height, window_mode );
@@ -605,6 +606,7 @@ qboolean VID_SetMode( void )
 	case rserr_ok:
 		vid_state.prev_width = screen_width;
 		vid_state.prev_height = screen_height;
+		Con_Reportf( "VID_SetMode: Successfully applied resolution %dx%d\n", screen_width, screen_height );
 
 		return true;
 		break;
@@ -618,7 +620,7 @@ qboolean VID_SetMode( void )
 			return true;
 		break;
 	case rserr_invalid_mode:
-		Sys_Warn( "%s: invalid mode, engine will run in %dx%d", __func__, vid_state.prev_width, vid_state.prev_height );
+		Sys_Warn( "%s: invalid mode %dx%d, engine will run in %dx%d", __func__, screen_width, screen_height, vid_state.prev_width, vid_state.prev_height );
 		break;
 	}
 

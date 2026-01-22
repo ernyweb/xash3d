@@ -44,8 +44,11 @@ void R_SaveVideoMode( int w, int h, int render_w, int render_h, qboolean maximiz
 {
 	string temp;
 
+	Con_Reportf( "R_SaveVideoMode: Saving mode w=%d h=%d render_w=%d render_h=%d maximized=%d\n", w, h, render_w, render_h, maximized );
+
 	if( !w || !h || !render_w || !render_h )
 	{
+		Con_Reportf( S_ERROR "R_SaveVideoMode: Invalid dimensions, bailing out\n" );
 		host.renderinfo_changed = false;
 		return;
 	}
@@ -72,7 +75,10 @@ void R_SaveVideoMode( int w, int h, int render_w, int render_h, qboolean maximiz
 	host.renderinfo_changed = false;
 
 	if( refState.width == render_w && refState.height == render_h )
+	{
+		Con_Reportf( "R_SaveVideoMode: Resolution already matches, skipping SCR_VidInit\n" );
 		return;
+	}
 
 	refState.scale_x = (float)render_w / w;
 	refState.scale_y = (float)render_h / h;
@@ -121,6 +127,7 @@ void VID_CheckChanges( void )
 
 	if( host.renderinfo_changed )
 	{
+		Con_Reportf( "VID_CheckChanges: renderinfo_changed is set, calling VID_SetMode\n" );
 		if( VID_SetMode( ))
 		{
 			SCR_VidInit(); // tell the client.dll what vid_mode has changed
@@ -173,6 +180,7 @@ void VID_SetDisplayTransform( int *render_w, int *render_h )
 static void VID_Mode_f( void )
 {
 	int w, h;
+	char cmd[128];
 
 	switch( Cmd_Argc() )
 	{
@@ -237,7 +245,16 @@ static void VID_Mode_f( void )
 		return;
 	}
 
-	R_ChangeDisplaySettings( w, h, bound( 0, vid_fullscreen.value, WINDOW_MODE_COUNT - 1 ));
+	// Use Cbuf_AddText to execute width and height commands
+	// This ensures proper cvar change handling and triggers renderinfo_changed
+	Q_snprintf( cmd, sizeof( cmd ), "width %d; height %d\n", w, h );
+	Con_Printf( "Applying resolution: %dx%d\n", w, h );
+	Cbuf_AddText( cmd );
+	
+	// Immediately set the flag to ensure VID_CheckChanges catches it
+	// even if command buffer hasn't been executed yet
+	SetBits( host.renderinfo_changed, true );
+	Con_Reportf( "VID_Mode_f: Set renderinfo_changed flag\n" );
 }
 
 void VID_Init( void )

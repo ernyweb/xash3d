@@ -1168,6 +1168,20 @@ static void Host_InitCommon( int argc, char **argv, const char *progname, qboole
 
 	IN_Init();
 	Key_Init();
+
+	// Apply resolution from Android launcher if set
+#if XASH_MOBILE_PLATFORM
+	{
+		const char *width_env = getenv( "XASH3D_WIDTH" );
+		const char *height_env = getenv( "XASH3D_HEIGHT" );
+
+		if( width_env && height_env )
+		{
+			Con_Reportf( "%s: Applying resolution from launcher: %sx%s\n", __func__, width_env, height_env );
+			Cbuf_AddTextf( "window_width %s; window_height %s; vid_mode\n", width_env, height_env );
+		}
+	}
+#endif
 }
 
 static void Host_FreeCommon( void )

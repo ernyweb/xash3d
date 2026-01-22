@@ -469,9 +469,13 @@ void VID_SaveWindowSize( int width, int height )
 	qboolean maximized = FBitSet( SDL_GetWindowFlags( host.hWnd ), SDL_WINDOW_MAXIMIZED );
 	int render_w = width, render_h = height;
 
+	Con_Reportf( "VID_SaveWindowSize: Saving window size %dx%d (maximized: %d)\n", width, height, maximized );
+
 	VID_GetWindowSizeInPixels( host.hWnd, sw.renderer, &render_w, &render_h );
 	VID_SetDisplayTransform( &render_w, &render_h );
 	R_SaveVideoMode( width, height, render_w, render_h, maximized );
+
+	Con_Reportf( "VID_SaveWindowSize: Saved render size %dx%d\n", render_w, render_h );
 }
 
 static qboolean VID_GuessFullscreenMode( int display_index, const SDL_DisplayMode *want, SDL_DisplayMode *got )
@@ -562,6 +566,8 @@ static qboolean VID_GetDisplayBounds( int display_index, SDL_Window *hWnd, SDL_R
 static qboolean VID_SetScreenResolution( int width, int height, window_mode_t window_mode, window_mode_t prev_window_mode )
 {
 	int out_width, out_height;
+
+	Con_Reportf( "VID_SetScreenResolution: Attempting to set %dx%d mode=%d (prev_mode=%d)\n", width, height, window_mode, prev_window_mode );
 
 	switch( window_mode )
 	{
@@ -1145,20 +1151,29 @@ rserr_t R_ChangeDisplaySettings( int width, int height, window_mode_t window_mod
 {
 	SDL_DisplayMode display_mode;
 
+	Con_Reportf( "R_ChangeDisplaySettings: Attempting to change resolution to %dx%d (mode: %d)\n", width, height, window_mode );
+
 	if( !host.hWnd )
 	{
 		if( !VID_CreateWindow( width, height, window_mode ))
+		{
+			Con_Reportf( S_ERROR "R_ChangeDisplaySettings: Failed to create window with resolution %dx%d\n", width, height );
 			return rserr_invalid_mode;
+		}
 	}
 	else
 	{
 		if( !VID_SetScreenResolution( width, height, window_mode, refState.window_mode ))
+		{
+			Con_Reportf( S_ERROR "R_ChangeDisplaySettings: Failed to set screen resolution to %dx%d\n", width, height );
 			return rserr_invalid_fullscreen;
+		}
 	}
 
 	SDL_GetWindowDisplayMode( host.hWnd, &display_mode );
 	refState.desktopBitsPixel = SDL_BITSPERPIXEL( display_mode.format );
 	refState.window_mode = window_mode;
+	Con_Reportf( "R_ChangeDisplaySettings: Successfully changed resolution to %dx%d\n", width, height );
 	return rserr_ok;
 }
 
@@ -1195,35 +1210,43 @@ qboolean VID_SetMode( void )
 	}
 
 #if XASH_MOBILE_PLATFORM
-	// On mobile platforms, we allow fullscreen only but still support resolution changes
-	if( Q_strcmp( vid_fullscreen.string, DEFAULT_FULLSCREEN ))
-	{
-		Cvar_DirectSet( &vid_fullscreen, DEFAULT_FULLSCREEN );
-		Con_Reportf( S_NOTE "%s: setting to fullscreen mode on mobile platform\n", __func__ );
-	}
+	// On mobile platforms, enforce fullscreen mode for better mobile experience
+	// but allow resolution changes
+	window_mode = WINDOW_MODE_FULLSCREEN;
+	
+	// Log current requested resolution
+	Con_Reportf( "VID_SetMode: Mobile platform - setting %dx%d resolution in fullscreen\n", iScreenWidth, iScreenHeight );
+#else
+	window_mode = bound( 0, vid_fullscreen.value, WINDOW_MODE_COUNT - 1 );
 #endif
 
-	window_mode = bound( 0, vid_fullscreen.value, WINDOW_MODE_COUNT - 1 );
 	SetBits( gl_vsync.flags, FCVAR_CHANGED );
 
 	if(( err = R_ChangeDisplaySettings( iScreenWidth, iScreenHeight, window_mode )) == rserr_ok )
 	{
 		sdlState.prev_width = iScreenWidth;
 		sdlState.prev_height = iScreenHeight;
+		Con_Reportf( "VID_SetMode: Successfully applied resolution %dx%d\n", iScreenWidth, iScreenHeight );
 	}
 	else
 	{
+		Con_Reportf( "VID_SetMode: Failed to apply resolution %dx%d (error %d)\n", iScreenWidth, iScreenHeight, err );
+		
 		if( err == rserr_invalid_fullscreen )
 		{
+#if !XASH_MOBILE_PLATFORM
 			Cvar_DirectSetValue( &vid_fullscreen, WINDOW_MODE_WINDOWED );
 			Con_Reportf( S_ERROR "%s: fullscreen unavailable in this mode\n", __func__ );
 			Sys_Warn( "fullscreen unavailable in this mode!" );
 			if(( err = R_ChangeDisplaySettings( iScreenWidth, iScreenHeight, WINDOW_MODE_WINDOWED )) == rserr_ok )
 				return true;
+#else
+			Con_Reportf( S_ERROR "%s: fullscreen mode not available on mobile platform\n", __func__ );
+#endif
 		}
 		else if( err == rserr_invalid_mode )
 		{
-			Con_Reportf( S_ERROR "%s: invalid mode\n", __func__ );
+			Con_Reportf( S_ERROR "%s: invalid mode %dx%d\n", __func__, iScreenWidth, iScreenHeight );
 			Sys_Warn( "invalid mode, engine will run in %dx%d", sdlState.prev_width, sdlState.prev_height );
 		}
 
