@@ -746,7 +746,7 @@ static qboolean License_ParseOfflineToken( const char *token, license_info_t *in
     Q_strncpy( signatureHex, sigStart, sigSize );
     signatureHex[sigSize - 1] = '\0';
 
-    Q_memset( info, 0, sizeof( *info ) );
+    memset( info, 0, sizeof( *info ) );
     info->valid = false;
 
     if( !License_ReadTokenField( token, "user", info->user_id, sizeof( info->user_id )) )
@@ -911,8 +911,8 @@ void License_Init( void )
     Cmd_AddCommand( "license_help", License_Help_f, "show license commands" );
     Cmd_AddCommand( "license_deviceid", License_DeviceId_f, "print current device identifier" );
 
-    Q_memset( s_license_key, 0, sizeof( s_license_key ) );
-    Q_memset( &s_license_info, 0, sizeof( s_license_info ) );
+    memset( s_license_key, 0, sizeof( s_license_key ) );
+    memset( &s_license_info, 0, sizeof( s_license_info ) );
     license_server = Cvar_Get( "license_server", "http://72.60.130.39:3000", FCVAR_ARCHIVE, "License backend server URL" );
     License_LoadKey();
     License_LoadOfflineToken();
