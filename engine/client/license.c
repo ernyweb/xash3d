@@ -28,6 +28,7 @@ GNU General Public License for more details.
 #include <ctype.h>
 #include <netdb.h>
 #include <sys/time.h>
+#include <string.h>
 
 extern const char *ID_GetMD5( void );
 
@@ -39,6 +40,13 @@ static convar_t *license_server;
 
 static const char s_offline_hmac_secret[] = "xash3d-offline-token-demo-secret-change-me";
 static const char s_license_filename[] = "license.key";
+
+static void License_SaveKey( void );
+static void License_SaveOfflineToken( const char *token );
+static void License_LoadOfflineToken( void );
+static void License_LoadKey( void );
+static void License_ClearKey_f( void );
+static void License_SetKey_f( void );
 
 static void License_SetStatus( const char *status )
 {
@@ -92,7 +100,7 @@ static void License_SaveOfflineToken( const char *token )
 
 static void License_LoadOfflineToken( void )
 {
-    int size;
+    fs_offset_t size;
     char *data = (char *)FS_LoadFile( s_license_token_filename, &size, false );
 
     if( !data || size <= 0 )
@@ -108,7 +116,7 @@ static void License_LoadOfflineToken( void )
 
 static void License_LoadKey( void )
 {
-    int size;
+    fs_offset_t size;
     char *data = (char *)FS_LoadFile( s_license_filename, &size, false );
 
     if( !data || size <= 0 )
@@ -145,7 +153,7 @@ static void License_SetKey_f( void )
     Con_Printf( "License key saved. Use license_validate_online to verify against the backend.\n" );
 }
 
-static qboolean License_IsValid( void )
+qboolean License_IsValid( void )
 {
     return s_license_info.valid;
 }
@@ -344,7 +352,7 @@ static int License_HttpPost( const char *url, const char *body, char *response, 
 
     struct addrinfo hints;
     struct addrinfo *result, *rp;
-    Q_memset( &hints, 0, sizeof( hints ) );
+    memset( &hints, 0, sizeof( hints ) );
     hints.ai_family = AF_UNSPEC;
     hints.ai_socktype = SOCK_STREAM;
 
@@ -443,7 +451,7 @@ static int License_HttpPost( const char *url, const char *body, char *response, 
     }
 
     if( headerEnd + 4 < response + received )
-        Q_memmove( response, headerEnd + 4, received - (int)( headerEnd + 4 - response ) + 1 );
+        memmove( response, headerEnd + 4, received - (int)( headerEnd + 4 - response ) + 1 );
     else
         response[0] = '\0';
 
@@ -559,7 +567,7 @@ static void SHA256_Init( uint32_t state[8], byte data[64], uint64_t *bitlen )
     state[6] = 0x1f83d9ab;
     state[7] = 0x5be0cd19;
     *bitlen = 0;
-    Q_memset( data, 0, 64 );
+    memset( data, 0, 64 );
 }
 
 static uint32_t SHA256_RotateRight( uint32_t value, int bits )
@@ -642,7 +650,7 @@ static void SHA256_Update( uint32_t state[8], byte data[64], uint64_t *bitlen, c
         {
             SHA256_Transform( state, data );
             index = 0;
-            Q_memset( data, 0, 64 );
+            memset( data, 0, 64 );
         }
     }
 }
@@ -663,7 +671,7 @@ static void SHA256_Final( uint32_t state[8], byte data[64], uint64_t bitlen, byt
             data[index++] = 0x00;
         SHA256_Transform( state, data );
         index = 0;
-        Q_memset( data, 0, 64 );
+        memset( data, 0, 64 );
     }
 
     while( index < 56 )
@@ -671,8 +679,8 @@ static void SHA256_Final( uint32_t state[8], byte data[64], uint64_t bitlen, byt
 
     uint32_t hi = SHA256_BigEndian32( (uint32_t)( bitlen >> 32 ) );
     uint32_t lo = SHA256_BigEndian32( (uint32_t)( bitlen & 0xFFFFFFFFu ) );
-    Q_memcpy( &data[56], &hi, 4 );
-    Q_memcpy( &data[60], &lo, 4 );
+    memcpy( &data[56], &hi, 4 );
+    memcpy( &data[60], &lo, 4 );
 
     SHA256_Transform( state, data );
 
@@ -693,13 +701,13 @@ static void HMAC_SHA256( const byte *key, int keyLen, const byte *data, int data
     uint64_t bitlen;
     int i;
 
-    Q_memset( keyBlock, 0, sizeof( keyBlock ) );
+    memset( keyBlock, 0, sizeof( keyBlock ) );
     if( keyLen > 64 )
     {
         SHA256_Init( state, keyBlock, &bitlen );
         SHA256_Update( state, keyBlock, &bitlen, key, keyLen );
         SHA256_Final( state, keyBlock, bitlen, keyBlock );
-        Q_memset( keyBlock + 32, 0, 32 );
+        memset( keyBlock + 32, 0, 32 );
     }
     else
     {
