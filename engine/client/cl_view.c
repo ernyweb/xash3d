@@ -20,6 +20,7 @@ GNU General Public License for more details.
 #include "vgui_draw.h"
 #include "sound.h"
 #include "input.h" // touch
+#include "license.h"
 #include "platform/platform.h" // GL_UpdateSwapInterval
 
 /*
@@ -544,6 +545,8 @@ void V_PostRender( void )
 		UI_UpdateMenu( host.realtime );
 		Con_DrawVersion();
 		Con_DrawDebug(); // must be last
+		License_Enforce();
+		License_Draw();
 		Touch_Draw();
 		OSK_Draw();
 

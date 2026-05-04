@@ -22,6 +22,7 @@ GNU General Public License for more details.
 #include "wadfile.h"
 #include "input.h"
 #include "utflib.h"
+#include "license.h"
 
 static CVAR_DEFINE_AUTO( scr_conspeed, "600", FCVAR_ARCHIVE, "console moving speed" );
 static CVAR_DEFINE_AUTO( con_notifytime, "3", FCVAR_ARCHIVE, "notify time to live" );
@@ -821,6 +822,7 @@ void Con_Init( void )
 	Cmd_AddCommand( "messagemode", Con_MessageMode_f, "enable message mode \"say\"" );
 	Cmd_AddCommand( "messagemode2", Con_MessageMode2_f, "enable message mode \"say_team\"" );
 	Cmd_AddCommand( "contimes", Con_SetTimes_f, "change number of console overlay lines (4-64)" );
+	License_Init();
 	con.initialized = true;
 
 	Con_Printf( "Console initialized.\n" );
