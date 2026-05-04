@@ -1,4 +1,4 @@
-# xash3d License Server
+.zip# xash3d License Server
 
 A minimal Node.js backend for issuing and validating xash3d license keys and offline tokens.
 
@@ -24,6 +24,20 @@ npm start
 - Use a long, unique `LICENSE_SERVER_SECRET`
 - Run server on `0.0.0.0` and forward port `3000` from your firewall
 - Use a process manager such as `pm2` or `systemd`
+
+## Run with screen
+A helper script is available to start the server in a detached `screen` session:
+
+```bash
+cd /workspaces/xash3d/backend
+./start_license_server.sh
+```
+
+Then attach to the session with:
+
+```bash
+screen -r xash-license-server
+```
 
 ## Example request
 

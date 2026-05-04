@@ -14,7 +14,6 @@ import android.view.WindowManager;
 import org.libsdl.app.SDLActivity;
 
 import su.xash.engine.util.AndroidBug5497Workaround;
-import su.xash.engine.ui.ResolutionDialog;
 
 import java.util.Arrays;
 import java.util.List;
@@ -23,7 +22,6 @@ public class XashActivity extends SDLActivity {
 	private boolean mUseVolumeKeys;
 	private String mPackageName;
 	private static final String TAG = "XashActivity";
-	private ResolutionDialog mResolutionDialog;
 
 	@Override
 	protected void onCreate(Bundle savedInstanceState) {
@@ -36,12 +34,6 @@ public class XashActivity extends SDLActivity {
 		}
 
 		AndroidBug5497Workaround.assistActivity(this);
-		
-		// Initialize resolution dialog
-		mResolutionDialog = new ResolutionDialog(this);
-		
-		// Show resolution selection dialog
-		showResolutionDialog();
 	}
 
 	@Override
@@ -176,16 +168,4 @@ public class XashActivity extends SDLActivity {
 		return argv.split(" ");
 	}
 
-	private void showResolutionDialog() {
-		mResolutionDialog.showDialog(this, (width, height) -> {
-			// Apply resolution to engine
-			String widthStr = String.valueOf(width);
-			String heightStr = String.valueOf(height);
-			
-			Log.d(TAG, "Resolution selected: " + width + "x" + height);
-			
-			// Set environment variables for the engine to pick up
-			nativeSetenv("XASH3D_WIDTH", widthStr);
-			nativeSetenv("XASH3D_HEIGHT", heightStr);
-		});
-	}}
+}
