@@ -711,7 +711,7 @@ static void HMAC_SHA256( const byte *key, int keyLen, const byte *data, int data
     }
     else
     {
-        Q_memcpy( keyBlock, key, keyLen );
+        memcpy( keyBlock, key, keyLen );
     }
 
     for( i = 0; i < 64; i++ )
