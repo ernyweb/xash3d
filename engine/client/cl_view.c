@@ -545,8 +545,14 @@ void V_PostRender( void )
 		UI_UpdateMenu( host.realtime );
 		Con_DrawVersion();
 		Con_DrawDebug(); // must be last
-		License_Enforce();
-		License_Draw();
+		
+		// License menu (shows when license is required)
+		if( License_ShouldShowMenu() )
+		{
+			License_ProcessInput();
+			License_DrawMenu();
+		}
+		
 		Touch_Draw();
 		OSK_Draw();
 

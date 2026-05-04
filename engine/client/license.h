@@ -22,9 +22,10 @@ typedef struct license_info_s
 {
     char user_id[64];
     char plan[32];
-    uint32_t expires;
+    uint32_t expires;  // Will be XORed with validation seed
     char device_id[64];
     char nonce[64];
+    uint32_t checksum; // Integrity check
     qboolean valid;
 } license_info_t;
 
@@ -34,7 +35,9 @@ const char *License_GetStatus( void );
 qboolean License_ValidateOfflineToken( const char *token );
 const char *License_GetDeviceId( void );
 qboolean License_IsValid( void );
-void License_Draw( void );
+void License_DrawMenu( void );
+void License_ProcessInput( void );
+qboolean License_ShouldShowMenu( void );
 void License_Enforce( void );
 
 #endif // LICENSE_H

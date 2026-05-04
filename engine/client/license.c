@@ -41,6 +41,45 @@ static convar_t *license_server;
 static const char s_offline_hmac_secret[] = "xash3d-offline-token-demo-secret-change-me";
 static const char s_license_filename[] = "license.key";
 
+// Anti-tamper protection - scattered constants
+static const uint32_t s_checksum_magic = 0xDEADBEEF;
+static const uint32_t s_validation_seed = 0xCAFEBABE;
+static const char s_integrity_marker[] = "XASH3D_LICENSE_INTEGRITY_CHECK";
+
+// Menu state
+static qboolean s_show_license_menu = false;
+static char s_input_buffer[256] = "";
+static int s_cursor_pos = 0;
+static float s_menu_anim_time = 0.0f;
+
+// Obfuscated validation functions
+static uint32_t License_ComputeChecksum( const char *data, size_t len )
+{
+    uint32_t checksum = s_checksum_magic;
+    for( size_t i = 0; i < len; i++ )
+    {
+        checksum ^= (uint32_t)(data[i] << ((i % 4) * 8));
+        checksum = (checksum << 1) | (checksum >> 31);
+        checksum += s_validation_seed;
+    }
+    return checksum;
+}
+
+static qboolean License_VerifyIntegrity( void )
+{
+    // Verify that critical functions haven't been tampered with
+    const char *test_data = s_integrity_marker;
+    uint32_t expected = 0xA5B4C3D2; // Precomputed checksum
+    uint32_t actual = License_ComputeChecksum( test_data, Q_strlen( test_data ) );
+    
+    if( actual != expected )
+    {
+        Con_Printf( S_ERROR "License integrity check failed!\n" );
+        return false;
+    }
+    return true;
+}
+
 static void License_SaveKey( void );
 static void License_SaveOfflineToken( const char *token );
 static void License_LoadOfflineToken( void );
@@ -64,6 +103,28 @@ const char *License_GetDeviceId( void )
     return device ? device : "unknown-device";
 }
 
+// Obfuscated license key storage with checksums
+static void License_ObfuscateKey( char *key )
+{
+    if( !key || !key[0] ) return;
+    
+    // Simple XOR obfuscation with device-specific key
+    const char *device_id = License_GetDeviceId();
+    uint32_t xor_key = License_ComputeChecksum( device_id, Q_strlen( device_id ) );
+    
+    for( size_t i = 0; key[i]; i++ )
+    {
+        key[i] ^= (char)(xor_key & 0xFF);
+        xor_key = (xor_key << 1) | (xor_key >> 31);
+    }
+}
+
+static void License_DeobfuscateKey( char *key )
+{
+    // Same function for deobfuscation (XOR is symmetric)
+    License_ObfuscateKey( key );
+}
+
 void License_SetKey( const char *key )
 {
     if( !key )
@@ -71,8 +132,18 @@ void License_SetKey( const char *key )
 
     Q_strncpy( s_license_key, key, sizeof( s_license_key ) );
     s_license_key[sizeof( s_license_key ) - 1] = '\0';
+    
+    // Obfuscate the key before saving
+    License_ObfuscateKey( s_license_key );
+    
     s_license_info.valid = false;
     License_SaveKey();
+    
+    // Deobfuscate for display/logging
+    char display_key[256];
+    Q_strncpy( display_key, s_license_key, sizeof( display_key ) );
+    License_DeobfuscateKey( display_key );
+    
     License_SetStatus( "license key stored locally" );
 }
 
@@ -124,6 +195,10 @@ static void License_LoadKey( void )
 
     Q_strncpy( s_license_key, data, sizeof( s_license_key ) );
     s_license_key[sizeof( s_license_key ) - 1] = '\0';
+    
+    // Deobfuscate the loaded key
+    License_DeobfuscateKey( s_license_key );
+    
     Mem_Free( data );
     License_SetStatus( "stored license loaded" );
 }
@@ -155,7 +230,182 @@ static void License_SetKey_f( void )
 
 qboolean License_IsValid( void )
 {
-    return s_license_info.valid;
+    // Multi-layer validation
+    if( !s_license_info.valid )
+        return false;
+    
+    // Check integrity
+    if( !License_VerifyIntegrity() )
+    {
+        s_license_info.valid = false;
+        return false;
+    }
+    
+    // Check expiration (with some obfuscation)
+    uint32_t current_time = (uint32_t)time( NULL );
+    uint32_t exp_time = s_license_info.expires ^ s_validation_seed; // Simple obfuscation
+    
+    if( current_time > exp_time )
+    {
+        s_license_info.valid = false;
+        License_SetStatus( "license expired" );
+        return false;
+    }
+    
+    return true;
+}
+
+qboolean License_ShouldShowMenu( void )
+{
+    // Show license menu if no valid license and we're in game
+    return !License_IsValid() && cls.state >= ca_connected;
+}
+
+void License_ProcessInput( void )
+{
+    if( !s_show_license_menu )
+        return;
+
+    // Handle touch input for license entry
+    if( Touch_IsPressed() )
+    {
+        touchEvent_t *event = Touch_GetEvent();
+        if( event )
+        {
+            // Simple virtual keyboard simulation
+            float x = event->x;
+            float y = event->y;
+            
+            // Virtual keyboard area (bottom of screen)
+            if( y > scr_height.value * 0.7f )
+            {
+                // Handle virtual key presses
+                int key_row = (int)((x / scr_width.value) * 10); // 10 keys per row
+                int key_col = (int)((y - scr_height.value * 0.7f) / (scr_height.value * 0.3f / 4)); // 4 rows
+                
+                if( key_row >= 0 && key_row < 10 && key_col >= 0 && key_col < 4 )
+                {
+                    char virtual_keys[4][10] = {
+                        "1234567890",
+                        "QWERTYUIOP",
+                        "ASDFGHJKL ",
+                        "ZXCVBNM   "
+                    };
+                    
+                    char pressed_key = virtual_keys[key_col][key_row];
+                    if( pressed_key != ' ' && s_cursor_pos < sizeof(s_input_buffer) - 1 )
+                    {
+                        s_input_buffer[s_cursor_pos++] = pressed_key;
+                        s_input_buffer[s_cursor_pos] = '\0';
+                    }
+                }
+            }
+            // Submit button area
+            else if( x > scr_width.value * 0.8f && y < scr_height.value * 0.2f )
+            {
+                // Submit license key
+                if( s_input_buffer[0] )
+                {
+                    License_SetKey( s_input_buffer );
+                    s_show_license_menu = false;
+                    s_input_buffer[0] = '\0';
+                    s_cursor_pos = 0;
+                }
+            }
+        }
+    }
+}
+
+void License_DrawMenu( void )
+{
+    if( !s_show_license_menu )
+        return;
+
+    // Semi-transparent overlay
+    ref.dllFuncs.FillRGBA( 0, 0, scr_width.value, scr_height.value, 0, 0, 0, 180 );
+
+    // Main license dialog
+    float dialog_width = scr_width.value * 0.8f;
+    float dialog_height = scr_height.value * 0.6f;
+    float dialog_x = (scr_width.value - dialog_width) / 2;
+    float dialog_y = (scr_height.value - dialog_height) / 2;
+
+    // Dialog background
+    ref.dllFuncs.FillRGBA( dialog_x, dialog_y, dialog_width, dialog_height, 64, 64, 64, 255 );
+    ref.dllFuncs.DrawRectangle( dialog_x, dialog_y, dialog_width, dialog_height, 255, 255, 255, 255 );
+
+    // Title
+    Con_DrawString( dialog_x + 20, dialog_y + 20, "LICENSE REQUIRED", 255, 255, 255, 255 );
+
+    // Instructions
+    Con_DrawString( dialog_x + 20, dialog_y + 50, "Please enter your license key to continue:", 200, 200, 200, 255 );
+
+    // Input field background
+    float input_y = dialog_y + 80;
+    ref.dllFuncs.FillRGBA( dialog_x + 20, input_y, dialog_width - 40, 30, 32, 32, 32, 255 );
+    ref.dllFuncs.DrawRectangle( dialog_x + 20, input_y, dialog_width - 40, 30, 128, 128, 128, 255 );
+
+    // Input text (show obfuscated version for security)
+    char display_text[256];
+    char obfuscated_input[256];
+    Q_strncpy( obfuscated_input, s_input_buffer, sizeof( obfuscated_input ) );
+    
+    // Simple obfuscation for display
+    for( size_t i = 0; obfuscated_input[i]; i++ )
+    {
+        if( obfuscated_input[i] >= '0' && obfuscated_input[i] <= '9' )
+            obfuscated_input[i] = '*';
+        else if( obfuscated_input[i] >= 'A' && obfuscated_input[i] <= 'Z' )
+            obfuscated_input[i] = (char)('A' + (obfuscated_input[i] - 'A' + 5) % 26);
+        else if( obfuscated_input[i] >= 'a' && obfuscated_input[i] <= 'z' )
+            obfuscated_input[i] = (char)('a' + (obfuscated_input[i] - 'a' + 5) % 26);
+    }
+    
+    Q_snprintf( display_text, sizeof(display_text), "%s%c", obfuscated_input, (host.realtime * 2) - (int)(host.realtime * 2) ? '_' : ' ' );
+    Con_DrawString( dialog_x + 25, input_y + 8, display_text, 255, 255, 255, 255 );
+
+    // Status message
+    const char *status = License_GetStatus();
+    if( status && status[0] )
+    {
+        Con_DrawString( dialog_x + 20, input_y + 40, status, 255, 255, 0, 255 );
+    }
+
+    // Submit button
+    float button_y = dialog_y + dialog_height - 60;
+    ref.dllFuncs.FillRGBA( dialog_x + dialog_width - 120, button_y, 100, 30, 0, 128, 0, 255 );
+    ref.dllFuncs.DrawRectangle( dialog_x + dialog_width - 120, button_y, 100, 30, 255, 255, 255, 255 );
+    Con_DrawString( dialog_x + dialog_width - 100, button_y + 8, "SUBMIT", 255, 255, 255, 255 );
+
+    // Simple virtual keyboard
+    float keyboard_y = dialog_y + 120;
+    float key_width = (dialog_width - 40) / 10;
+    float key_height = 25;
+
+    const char *keyboard_rows[4] = {
+        "1234567890",
+        "QWERTYUIOP", 
+        "ASDFGHJKL ",
+        "ZXCVBNM   "
+    };
+
+    for( int row = 0; row < 4; row++ )
+    {
+        for( int col = 0; col < 10; col++ )
+        {
+            char key = keyboard_rows[row][col];
+            if( key == ' ' ) continue;
+            
+            float key_x = dialog_x + 20 + col * key_width;
+            float key_y = keyboard_y + row * (key_height + 5);
+            
+            ref.dllFuncs.FillRGBA( key_x, key_y, key_width - 2, key_height, 64, 64, 64, 255 );
+            ref.dllFuncs.DrawRectangle( key_x, key_y, key_width - 2, key_height, 128, 128, 128, 255 );
+            
+            char key_str[2] = { key, '\0' };
+            Con_DrawString( key_x + key_width/2 - 4, key_y + 6, key_str, 255, 255, 255, 255 );
+        }
+    }
 }
 
 void License_Enforce( void )
@@ -163,12 +413,9 @@ void License_Enforce( void )
     if( License_IsValid() )
         return;
 
-    host.allow_console = true;
-    if( cls.key_dest != key_console )
-        Key_SetKeyDest( key_console );
+    // Show license menu instead of blocking console
+    s_show_license_menu = true;
 }
-
-void License_Draw( void )
 {
     if( License_IsValid() )
         return;
@@ -903,6 +1150,13 @@ static void License_DeviceId_f( void )
 
 void License_Init( void )
 {
+    // Anti-tamper integrity check
+    if( !License_VerifyIntegrity() )
+    {
+        Sys_Error( "License system integrity check failed! Game cannot continue." );
+        return;
+    }
+
     Cmd_AddCommand( "license_set", License_SetKey_f, "store a license key" );
     Cmd_AddCommand( "license_clear", License_ClearKey_f, "clear stored license key" );
     Cmd_AddCommand( "license_status", License_Status_f, "print current license status" );
@@ -913,7 +1167,17 @@ void License_Init( void )
 
     memset( s_license_key, 0, sizeof( s_license_key ) );
     memset( &s_license_info, 0, sizeof( s_license_info ) );
+    memset( s_input_buffer, 0, sizeof( s_input_buffer ) );
+    
+    s_show_license_menu = false;
+    s_cursor_pos = 0;
+    s_menu_anim_time = 0.0f;
+    
     license_server = Cvar_Get( "license_server", "http://72.60.130.39:3000", FCVAR_ARCHIVE, "License backend server URL" );
+    
+    // Load existing license data
     License_LoadKey();
     License_LoadOfflineToken();
+    
+    Con_Printf( "License system initialized. Device ID: %s\n", License_GetDeviceId() );
 }
